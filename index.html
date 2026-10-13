@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>twitchsen</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style id="dynamicThemeStyles"></style>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+</head>
+<body>
+    <header class="app-header">
+        <div class="container header-content">
+            <h1 class="app-title"><a href="/" class="app-title-link">twitchsen</a></h1>
+            <div class="controls">
+                <div class="controls-group">
+                    <div class="channel-input-group">
+                        <input type="text" id="channelInput" class="channel-input" placeholder="Enter channel name (e.g., monstro)" autocomplete="off" spellcheck="false">
+                        <button id="loadBtn" class="btn btn-primary">Watch</button>
+                        <button id="followBtn" class="btn btn-secondary">Follow</button>
+                    </div>
+                    <div class="theme-selector">
+                        <select id="themeSelect" class="theme-select">
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="amoled">AMOLED</option>
+                            <option value="cyberpunk">Cyberpunk</option>
+                            <option value="nord">Nord</option>
+                            <option value="catppuccin">Catppuccin</option>
+                            <optgroup label="Custom Themes" id="customThemeGroup"></optgroup>
+                            <option value="new-custom">New Custom Theme...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div class="main-layout">
+            <aside id="sidebar" class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Following</h3>
+                </div>
+                <div id="followsList" class="follows-list"></div>
+                <div class="sidebar-empty" id="sidebarEmpty">No channels followed yet</div>
+            </aside>
+            <div class="content-area">
+                <div id="welcomeScreen" class="welcome-screen">
+                    <div class="welcome-content">
+                        <h2>twitchsen</h2>
+                        <p>No tracking. No ads. Just streams.</p>
+                        <p class="welcome-hint">Enter a channel name above to start watching</p>
+                    </div>
+                </div>
+                <div id="playerContainer" class="player-container" style="display: none;">
+                    <div class="player-wrapper">
+                        <video id="twitchVideo" controls autoplay playsinline style="width: 100%; height: 100%; background: #000;"></video>
+                    </div>
+                </div>
+            </div>
+            <aside id="chatSidebar" class="chat-sidebar" style="display: none;"></aside>
+        </div>
+    </main>
+
+    <div id="themeEditor" class="theme-editor-modal" style="display: none;">
+        <div class="theme-editor-content">
+            <div class="theme-editor-header">
+                <h3>Custom Theme Editor</h3>
+                <button id="closeThemeEditor" class="btn-close">✕</button>
+            </div>
+            <div class="theme-editor-body">
+                <div class="theme-editor-controls">
+                    <input type="text" id="themeNameInput" class="theme-name-input" placeholder="Theme name (e.g., My Theme)">
+                </div>
+                <textarea id="themeCssEditor" class="theme-css-editor" spellcheck="false" placeholder="/* Write your custom CSS here */&#10;&#10;:root {&#10;  --bg-primary: #0f0f0f;&#10;  --bg-secondary: #181818;&#10;  --bg-tertiary: #2a2a2a;&#10;  --text-primary: #f7f7f7;&#10;  --text-secondary: #adadb8;&#10;  --border-color: #3d3d40;&#10;  --accent-color: #9146ff;&#10;  --accent-hover: #772ce8;&#10;  --input-bg: #1f1f23;&#10;  --input-border: #3d3d40;&#10;  --input-focus: #9146ff;&#10;  --footer-text: #666666;&#10;  --welcome-bg: #181818;&#10;  --sidebar-bg: #181818;&#10;}"></textarea>
+            </div>
+            <div class="theme-editor-footer">
+                <button id="cancelTheme" class="btn btn-secondary">Cancel</button>
+                <button id="saveTheme" class="btn btn-primary">Save & Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="app-footer">
+        <div class="container">
+            <p class="footer-text">Self-hosted minimal Twitch viewer</p>
+        </div>
+    </footer>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

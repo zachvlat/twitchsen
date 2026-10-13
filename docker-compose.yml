@@ -1,0 +1,20 @@
+services:
+  twitchsen:
+    build: .
+    container_name: twitchsen
+    ports:
+      - "4444:4444"
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/backend/db
+    environment:
+      - PORT=4444
+      - NODE_ENV=production
+      - TZ=UTC
+      - LIVE_STATUS=on
+    networks:
+      - twitchsen_network
+
+networks:
+  twitchsen_network:
+    driver: bridge
