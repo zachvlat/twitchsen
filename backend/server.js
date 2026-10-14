@@ -1,6 +1,8 @@
 const express = require('express');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
+// Built-in SQLite (Node 22.13+): no native npm module, so the image works on any CPU architecture
+const { DatabaseSync } = require('node:sqlite');
 const https = require('https');
 const { spawn } = require('child_process');
 
@@ -32,21 +34,29 @@ app.get(['/', '/index.html', '/channel/:name'], (req, res) => {
 });
 
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'db', 'twitchsen.db');
-const db = new sqlite3.Database(dbPath);
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+const db = new DatabaseSync(dbPath);
 
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS follows (
+db.exec(`CREATE TABLE IF NOT EXISTS follows (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     channel TEXT UNIQUE NOT NULL,
     added_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  db.run(`CREATE TABLE IF NOT EXISTS themes (
+db.exec(`CREATE TABLE IF NOT EXISTS themes (
     slug TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     css TEXT NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-});
+
+const stmts = {
+  allFollows: db.prepare('SELECT channel FROM follows ORDER BY added_at ASC'),
+  addFollow: db.prepare('INSERT OR IGNORE INTO follows (channel) VALUES (?)'),
+  removeFollow: db.prepare('DELETE FROM follows WHERE channel = ?'),
+  allThemes: db.prepare('SELECT slug, name, css FROM themes ORDER BY updated_at ASC'),
+  saveTheme: db.prepare('INSERT OR REPLACE INTO themes (slug, name, css, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'),
+  removeTheme: db.prepare('DELETE FROM themes WHERE slug = ?'),
+};
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
@@ -90,22 +100,12 @@ async function getFollowData(channels) {
 }
 
 function allFollows() {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT channel FROM follows ORDER BY added_at ASC', [], (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows.map(r => r.channel.toLowerCase()));
-    });
-  });
+  return stmts.allFollows.all().map(r => r.channel.toLowerCase());
 }
 
 // --- Server-side custom themes ---
 function allThemes() {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT slug, name, css FROM themes ORDER BY updated_at ASC', [], (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows || []);
-    });
-  });
+  return stmts.allThemes.all();
 }
 
 function slugifyThemeName(name) {
@@ -129,19 +129,22 @@ app.post('/api/themes', (req, res) => {
     return res.status(400).json({ error: 'Valid name and css required' });
   }
   const slug = slugifyThemeName(name);
-  db.run('INSERT OR REPLACE INTO themes (slug, name, css, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)', [slug, name, css], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    stmts.saveTheme.run(slug, name, css);
     res.json({ slug, name, css });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.delete('/api/themes/:slug', (req, res) => {
   const slug = req.params.slug;
   if (!/^[a-z0-9-]{1,60}$/.test(slug)) return res.status(400).json({ error: 'Invalid slug' });
-  db.run('DELETE FROM themes WHERE slug = ?', [slug], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ removed: this.changes > 0 });
-  });
+  try {
+    res.json({ removed: stmts.removeTheme.run(slug).changes > 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/follows', async (req, res) => {
@@ -164,13 +167,11 @@ app.post('/api/follows', (req, res) => {
   if (!channel) {
     return res.status(400).json({ error: 'Valid channel name required' });
   }
-  db.run('INSERT OR IGNORE INTO follows (channel) VALUES (?)', [channel], function(err) {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    res.json({ channel, added: this.changes > 0 });
-  });
+  try {
+    res.json({ channel, added: stmts.addFollow.run(channel).changes > 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/follows/export', async (req, res) => {
@@ -193,13 +194,9 @@ app.post('/api/follows/import', async (req, res) => {
       const raw = (typeof item === 'string') ? item : (item && (item.channel || item.name || item.login));
       const channel = normalizeChannel(raw);
       if (!channel) continue;
-      const ok = await new Promise((resolve) => {
-        db.run('INSERT OR IGNORE INTO follows (channel) VALUES (?)', [channel], function(err) {
-          if (err) resolve(false);
-          else resolve(this.changes > 0);
-        });
-      });
-      if (ok) imported++;
+      try {
+        if (stmts.addFollow.run(channel).changes > 0) imported++;
+      } catch (e) {}
     }
     res.json({ imported });
   } catch (err) {
@@ -212,13 +209,11 @@ app.delete('/api/follows/:channel', (req, res) => {
   if (!channel) {
     return res.status(400).json({ error: 'Valid channel name required' });
   }
-  db.run('DELETE FROM follows WHERE channel = ?', [channel], function(err) {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    res.json({ removed: this.changes > 0 });
-  });
+  try {
+    res.json({ removed: stmts.removeFollow.run(channel).changes > 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/stream/:channel', (req, res) => {
