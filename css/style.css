@@ -115,7 +115,7 @@
 }
 
 html, body {
-    height: auto;
+    height: 100%;
     width: 100%;
 }
 
@@ -129,8 +129,7 @@ body {
     transition: background-color 0.2s ease, color 0.2s ease;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
-    overflow: auto;
+    overflow: hidden;
 }
 
 .container {
@@ -316,7 +315,7 @@ body {
 .main-layout {
     display: flex;
     flex-direction: row;
-    height: 100vh;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
     flex: 1;
@@ -506,7 +505,8 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     min-width: 0;
     min-height: 0;
     padding: 1rem;
@@ -515,7 +515,6 @@ body {
 /* Welcome screen */
 .welcome-screen {
     background-color: var(--welcome-bg, #181818);
-    border: 1px solid var(--border-color, #3d3d40);
     border-radius: 8px;
     padding: 3rem 1.5rem;
     text-align: center;
@@ -550,14 +549,13 @@ body {
     height: auto;
     min-height: 320px;
     background-color: var(--bg-secondary, #181818);
-    border: 1px solid var(--border-color, #3d3d40);
     border-radius: 8px;
-    padding: 0.75rem;
     transition: background-color 0.2s ease, border-color 0.2s ease;
     display: flex;
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .player-wrapper {
@@ -615,49 +613,6 @@ body {
     width: 100%;
     height: 100%;
     border: none;
-}
-
-/* Footer */
-.app-footer {
-    background-color: var(--bg-secondary, #181818);
-    border-top: 1px solid var(--border-color, #3d3d40);
-    padding: 0.5rem 0;
-    flex-shrink: 0;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-
-.footer-text {
-    color: var(--footer-text, #666666);
-    font-size: 0.75rem;
-    text-align: center;
-    margin: 0;
-}
-
-.footer-content {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.footer-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    color: var(--text-secondary, #adadb8);
-    font-size: 0.75rem;
-    text-decoration: none;
-    transition: color 0.15s ease;
-}
-
-.footer-link:hover {
-    color: var(--text-primary, #f7f7f7);
-}
-
-.footer-github-icon {
-    width: 16px;
-    height: 16px;
 }
 
 /* Responsive - hide sidebars on small screens */
@@ -962,11 +917,6 @@ body {
     color: var(--text-secondary, #adadb8);
 }
 
-/* Constrain sidebars to viewport height so footers remain visible */
-.sidebar,
-.chat-sidebar {
-    max-height: calc(100vh - 90px);
-}
 /* App title link */
 .app-title-link {
     color: inherit;
@@ -1030,8 +980,6 @@ body {
     gap: 1rem;
     padding: 0.5rem 0.75rem;
     background-color: var(--bg-secondary, #181818);
-    border: 1px solid var(--border-color, #3d3d40);
-    border-top: none;
     border-radius: 0 0 8px 8px;
     flex-shrink: 0;
 }
@@ -1303,11 +1251,8 @@ body {
     gap: 0.35rem;
     padding: 0.5rem 0.75rem;
     background-color: var(--bg-secondary, #181818);
-    border: 1px solid var(--border-color, #3d3d40);
-    border-top: none;
     border-radius: 0 0 8px 8px;
-    max-height: 40vh;
-    overflow-y: auto;
+    flex-shrink: 0;
 }
 .stream-game { font-size: 0.85rem; color: var(--accent-color, #9146ff); font-weight: 600; }
 .stream-bio { font-size: 0.85rem; color: var(--text-secondary, #adadb8); white-space: pre-wrap; }

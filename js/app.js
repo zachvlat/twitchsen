@@ -474,7 +474,7 @@ class TwitchViewer {
         const gameEl = document.getElementById('streamGame');
         const bioEl = document.getElementById('streamBio');
         if (details) {
-            if (gameEl) { gameEl.textContent = game ? ('Game: ' + game) : ''; gameEl.style.display = game ? '' : 'none'; }
+            if (gameEl) { gameEl.textContent = game || ''; gameEl.style.display = game ? '' : 'none'; }
             if (bioEl) { bioEl.textContent = bio || ''; bioEl.style.display = bio ? '' : 'none'; }
             details.style.display = (game || bio) ? 'flex' : 'none';
         }
