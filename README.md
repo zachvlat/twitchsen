@@ -2,7 +2,7 @@
 
 twitchsen is a minimal, self-hosted web application for watching Twitch streams without tracking or bloat. It provides a clean, distraction-free viewing experience with customizable CSS themes, channel following, and integrated chat.
 
-<img height="300" alt="1" src="https://github.com/user-attachments/assets/c0dc884d-8813-4838-8f50-bb531cbea964" />
+<img height="300" alt="1" src="https://github.com/user-attachments/assets/0d7b62d1-24c2-4017-9b04-741dd1f29d30" />
 
 
 ## How it works
