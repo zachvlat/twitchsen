@@ -240,7 +240,7 @@ app.get('/api/stream/:channel', (req, res) => {
   };
   proc.stdout.on('data', d => stdout += d);
   proc.stderr.on('data', d => stderr += d);
-  proc.on('close', code => {
+  proc.on('close', async (code) => {
     if (code !== 0) {
       console.error(`streamlink failed for ${channel} (exit ${code}): ${(stdout + stderr).trim().slice(0, 300)}`);
       return finish(404, { error: 'stream not found or offline', details: stderr.slice(0, 200) });
@@ -257,7 +257,17 @@ app.get('/api/stream/:channel', (req, res) => {
       const stream = streams[chosen];
       const upstream = stream && stream.url && parseUpstream(stream.url);
       if (!upstream) return finish(404, { error: 'stream not found or offline' });
-      finish(200, { url: hlsProxyPath(upstream.href), type: stream.type, quality: chosen, qualities: Object.keys(streams), title: (j.metadata && j.metadata.title) || null });
+      let game = (j.metadata && (j.metadata.game || j.metadata.game_name || j.metadata.category)) || null;
+      let bio = null;
+      try {
+        const users = await fetchJson(`https://api.ivr.fi/v2/twitch/user?login=${encodeURIComponent(channel)}`);
+        const u = Array.isArray(users) ? users[0] : null;
+        if (u) {
+          bio = (typeof u.bio === 'string' && u.bio.trim()) ? u.bio.trim() : null;
+          if (!game && u.stream) game = u.stream.gameName || u.stream.game || u.stream.game_name || null;
+        }
+      } catch (e) {}
+      finish(200, { url: hlsProxyPath(upstream.href), type: stream.type, quality: chosen, qualities: Object.keys(streams), title: (j.metadata && j.metadata.title) || null, game, bio });
     } catch (e) {
       finish(500, { error: 'parse error' });
     }

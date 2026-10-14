@@ -417,7 +417,7 @@ class TwitchViewer {
             const data = await res.json();
             if (data.quality) this.currentQuality = data.quality;
             this.populateQualityOptions(data.qualities, this.currentQuality);
-            this.updateStreamInfo(data.title, channel);
+            this.updateStreamInfo(data.title, channel, data.game, data.bio);
             const src = data.url;
             if (window.Hls && window.Hls.isSupported()) {
                 const Hls = window.Hls;
@@ -463,12 +463,20 @@ class TwitchViewer {
         }
     }
     
-    updateStreamInfo(title, channel) {
+    updateStreamInfo(title, channel, game, bio) {
         if (this.streamTitle) {
             this.streamTitle.textContent = title || channel || '';
         }
         if (this.streamInfo) {
             this.streamInfo.style.display = 'flex';
+        }
+        const details = document.getElementById('streamDetails');
+        const gameEl = document.getElementById('streamGame');
+        const bioEl = document.getElementById('streamBio');
+        if (details) {
+            if (gameEl) { gameEl.textContent = game ? ('Game: ' + game) : ''; gameEl.style.display = game ? '' : 'none'; }
+            if (bioEl) { bioEl.textContent = bio || ''; bioEl.style.display = bio ? '' : 'none'; }
+            details.style.display = (game || bio) ? 'flex' : 'none';
         }
         this.updateFollowButton();
     }
