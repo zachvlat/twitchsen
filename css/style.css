@@ -340,11 +340,38 @@ body {
     flex-shrink: 0;
 }
 
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
 .sidebar-header h3 {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-primary, #f7f7f7);
     margin: 0;
+}
+
+.sidebar-toggle {
+    background: none;
+    border: 1px solid var(--border-color, #3d3d40);
+    color: var(--text-secondary, #adadb8);
+    border-radius: 4px;
+    width: 22px;
+    height: 22px;
+    line-height: 1;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+    color: var(--text-primary, #f7f7f7);
+    border-color: var(--accent-color, #9146ff);
 }
 
 .follows-list {
@@ -361,6 +388,55 @@ body {
     border-bottom: 1px solid var(--border-color, #3d3d40);
     gap: 0.5rem;
     transition: background-color 0.15s ease;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+.follow-item:hover {
+    background-color: var(--bg-tertiary, #2a2a2a);
+}
+
+.follow-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-tertiary, #2a2a2a);
+    color: var(--text-primary, #f7f7f7);
+    font-weight: 600;
+    font-size: 0.85rem;
+    position: relative;
+}
+
+.follow-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.follow-logo.follow-logo-fallback {
+    background-color: var(--accent-color, #9146ff);
+    color: #ffffff;
+}
+
+/* Live indicator dot on the avatar */
+.follow-item.online .follow-logo::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background-color: #e91916;
+    border: 2px solid var(--sidebar-bg, #181818);
+    box-sizing: content-box;
 }
 
 .follow-item:hover {
@@ -555,6 +631,33 @@ body {
     margin: 0;
 }
 
+.footer-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.footer-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text-secondary, #adadb8);
+    font-size: 0.75rem;
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.footer-link:hover {
+    color: var(--text-primary, #f7f7f7);
+}
+
+.footer-github-icon {
+    width: 16px;
+    height: 16px;
+}
+
 /* Responsive - hide sidebars on small screens */
 @media (max-width: 1200px) {
     .chat-sidebar {
@@ -591,7 +694,7 @@ body {
     }
     .content-area {
         padding: 0.75rem;
-        min-height: 400px;
+        min-height: 320px;
     }
 }
 
@@ -673,6 +776,89 @@ body {
 
 .btn-close:hover {
     color: var(--text-primary, #f7f7f7);
+}
+
+/* Import help modal */
+.import-help-modal {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+    padding: 1rem;
+}
+
+.import-help-content {
+    background-color: var(--bg-secondary, #181818);
+    border: 1px solid var(--border-color, #3d3d40);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 640px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.import-help-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color, #3d3d40);
+    background-color: var(--bg-tertiary, #2a2a2a);
+}
+
+.import-help-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text-primary, #f7f7f7);
+    font-weight: 600;
+}
+
+.import-help-text {
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #adadb8);
+    margin: 0;
+}
+
+.import-help-code {
+    margin: 0 1rem 0.75rem;
+    padding: 0.75rem;
+    background-color: var(--input-bg, #1f1f23);
+    border: 1px solid var(--border-color, #3d3d40);
+    border-radius: 4px;
+    overflow: auto;
+    font-family: 'Courier New', 'Monaco', 'Consolas', monospace;
+    font-size: 0.75rem;
+    color: var(--text-primary, #f7f7f7);
+    line-height: 1.4;
+    max-height: 320px;
+}
+
+.import-help-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border-color, #3d3d40);
+    background-color: var(--bg-tertiary, #2a2a2a);
+}
+
+.import-help-badge {
+    vertical-align: super;
+    font-size: 0.65rem;
+    margin-left: 0.2rem;
+    cursor: pointer;
+    color: var(--accent-color, #9146ff);
+}
+
+.btn-sm {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
 }
 
 .theme-editor-body {
@@ -829,6 +1015,63 @@ body {
     background-color: rgba(0, 0, 0, 0.95);
 }
 
+/* Stream info bar below the player */
+.stream-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--bg-secondary, #181818);
+    border: 1px solid var(--border-color, #3d3d40);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    flex-shrink: 0;
+}
+
+.stream-title {
+    font-size: 0.875rem;
+    color: var(--text-primary, #f7f7f7);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.stream-follow-btn {
+    flex-shrink: 0;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.75rem;
+}
+
+.stream-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.stream-action-btn {
+    flex-shrink: 0;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.75rem;
+}
+
+.sidebar-footer {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid var(--border-color, #3d3d40);
+    flex-shrink: 0;
+}
+
+.sidebar-footer .btn {
+    flex: 1;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
+}
+
 /* IRC Chat */
 .chat-messages {
     flex: 1;
@@ -925,4 +1168,192 @@ body {
     font-size: 0.8rem;
     text-align: center;
     margin: 0.5rem 0;
+}
+
+/* Mobile: compact header, horizontal online-follows carousel, stacked layout */
+@media (max-width: 768px) {
+    .header-content,
+    .controls,
+    .controls-group {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: flex-start;
+        width: 100%;
+        gap: 0.5rem;
+        overflow-x: auto;
+    }
+
+    .channel-input-group {
+        flex-wrap: nowrap;
+        max-width: 100%;
+    }
+
+    .channel-input {
+        min-width: 80px;
+        max-width: 140px;
+        font-size: 0.8rem;
+    }
+
+    .btn {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.75rem;
+    }
+
+    .theme-select {
+        max-width: 110px;
+        font-size: 0.75rem;
+    }
+
+    .app-title {
+        font-size: 1rem;
+    }
+
+    .sidebar {
+        width: 100%;
+        max-height: none;
+        border: none;
+        border-top: 1px solid var(--border-color, #3d3d40);
+        border-bottom: 1px solid var(--border-color, #3d3d40);
+        order: 1;
+    }
+
+    .content-area {
+        order: 2;
+    }
+
+    .chat-sidebar {
+        order: 3;
+        width: 100%;
+        max-height: 60vh;
+        border: none;
+        border-top: 1px solid var(--border-color, #3d3d40);
+    }
+
+    html, body {
+        height: auto;
+    }
+
+    .app-main {
+        overflow: visible;
+    }
+
+    .main-layout {
+        height: auto;
+        overflow: visible;
+    }
+
+    .sidebar-header h3 {
+        display: none;
+    }
+
+    .follow-group-header {
+        display: none;
+    }
+
+    .follows-list {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        scroll-snap-type: x mandatory;
+    }
+
+    .follow-item {
+        flex: 0 0 auto;
+        border: none;
+        scroll-snap-align: start;
+        padding: 0.25rem;
+    }
+
+    .follow-item.offline {
+        display: none;
+    }
+
+    .follow-name,
+    .follow-viewers {
+        display: none;
+    }
+
+    .follow-logo {
+        width: 40px;
+        height: 40px;
+    }
+
+    .sidebar-toggle {
+        display: none;
+    }
+}
+
+/* Floating quality selector over the player */
+.quality-control {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 6;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.player-wrapper:hover .quality-control,
+.quality-control:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.quality-select {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    background-color: rgba(0, 0, 0, 0.65);
+    color: #f7f7f7;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.quality-select:hover,
+.quality-select:focus {
+    border-color: var(--accent-color, #9146ff);
+    outline: none;
+}
+
+/* Collapsible follows sidebar (logo-only when collapsed) */
+.sidebar.collapsed {
+    width: 64px;
+}
+
+.sidebar.collapsed .sidebar-header h3,
+.sidebar.collapsed .follow-name,
+.sidebar.collapsed .follow-viewers,
+.sidebar.collapsed .follow-group-header {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 0.75rem 0.25rem;
+}
+
+.sidebar.collapsed .follow-item {
+    justify-content: center;
+    padding: 0.5rem 0;
+}
+
+.sidebar.collapsed .follows-list {
+    align-items: center;
+}
+
+.sidebar.collapsed .sidebar-footer {
+    display: none;
+}
+
+/* Tweak follow item layout for avatar */
+.follow-item .follow-name {
+    margin-left: 0.25rem;
 }

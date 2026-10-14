@@ -16,6 +16,7 @@ WORKDIR /app
 COPY backend ./backend
 COPY css ./css
 COPY js ./js
+COPY assets ./assets
 COPY index.html ./index.html
 COPY README.md ./README.md
 COPY LICENSE ./LICENSE

@@ -17,7 +17,6 @@
                     <div class="channel-input-group">
                         <input type="text" id="channelInput" class="channel-input" placeholder="Enter channel name (e.g., monstro)" autocomplete="off" spellcheck="false">
                         <button id="loadBtn" class="btn btn-primary">Watch</button>
-                        <button id="followBtn" class="btn btn-secondary">Follow</button>
                     </div>
                     <div class="theme-selector">
                         <select id="themeSelect" class="theme-select">
@@ -41,9 +40,15 @@
             <aside id="sidebar" class="sidebar">
                 <div class="sidebar-header">
                     <h3>Following</h3>
+                    <button id="sidebarToggle" class="sidebar-toggle" type="button" title="Collapse follows" aria-label="Collapse follows">‹</button>
                 </div>
                 <div id="followsList" class="follows-list"></div>
                 <div class="sidebar-empty" id="sidebarEmpty">No channels followed yet</div>
+                <div class="sidebar-footer">
+                    <button id="exportFollowsBtn" class="btn btn-secondary btn-sm" type="button">Export</button>
+                    <button id="importFollowsBtn" class="btn btn-secondary btn-sm" type="button">Import <sup class="import-help-badge">?</sup></button>
+                    <input type="file" id="importFollowsInput" accept="application/json,.json" style="display: none;">
+                </div>
             </aside>
             <div class="content-area">
                 <div id="welcomeScreen" class="welcome-screen">
@@ -56,6 +61,18 @@
                 <div id="playerContainer" class="player-container" style="display: none;">
                     <div class="player-wrapper">
                         <video id="twitchVideo" controls autoplay playsinline style="width: 100%; height: 100%; background: #000;"></video>
+                        <div id="qualityControl" class="quality-control" style="display: none;">
+                            <select id="qualitySelect" class="quality-select" aria-label="Stream quality"></select>
+                        </div>
+                    </div>
+                    <div id="streamInfo" class="stream-info" style="display: none;">
+                        <div id="streamTitle" class="stream-title"></div>
+                        <div class="stream-actions">
+                            <button id="goLiveBtn" class="btn btn-secondary stream-action-btn" type="button" title="Jump to live edge" aria-label="Jump to live edge">
+                                <img src="/assets/fast.svg" alt="" width="16" height="16">
+                            </button>
+                            <button id="streamFollowBtn" class="btn btn-secondary stream-follow-btn" type="button">Follow</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -82,9 +99,42 @@
         </div>
     </div>
 
+    <div id="importHelpModal" class="import-help-modal" style="display: none;">
+        <div class="import-help-content">
+            <div class="import-help-header">
+                <h3>Export your Twitch following list</h3>
+                <button id="closeImportHelp" class="btn-close" type="button">✕</button>
+            </div>
+            <p class="import-help-text">On twitch.tv, open your Following page, then run this in the browser console (DevTools → Console). It downloads a JSON file you can import here.</p>
+            <pre class="import-help-code"><code>const values = [...document.querySelectorAll(
+  'div.Layout-sc-1xcs6mc-0 > div > div > div > div:nth-child(3) > div > div > a > strong:nth-child(2)'
+)].map(el => el.textContent.trim());
+
+const json = JSON.stringify(values, null, 2);
+const blob = new Blob([json], { type: "application/json" });
+const url = URL.createObjectURL(blob);
+
+const a = document.createElement("a");
+a.href = url;
+a.download = "following.json";
+a.click();
+
+URL.revokeObjectURL(url);</code></pre>
+            <div class="import-help-footer">
+                <button id="copyImportSnippet" class="btn btn-primary btn-sm" type="button">Copy</button>
+            </div>
+        </div>
+    </div>
+
     <footer class="app-footer">
-        <div class="container">
+        <div class="container footer-content">
             <p class="footer-text">Self-hosted minimal Twitch viewer</p>
+            <a class="footer-link" href="https://github.com/zachvlat/twitchsen" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
+                <svg class="footer-github-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+                </svg>
+                <span>GitHub</span>
+            </a>
         </div>
     </footer>
 

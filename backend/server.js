@@ -26,6 +26,7 @@ app.use(express.json());
 const indexFile = path.join(staticPath, 'index.html');
 app.use('/css', express.static(path.join(staticPath, 'css')));
 app.use('/js', express.static(path.join(staticPath, 'js')));
+app.use('/assets', express.static(path.join(staticPath, 'assets')));
 app.get(['/', '/index.html', '/channel/:name'], (req, res) => {
   res.sendFile(indexFile);
 });
@@ -38,6 +39,12 @@ db.serialize(() => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     channel TEXT UNIQUE NOT NULL,
     added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS themes (
+    slug TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    css TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 });
 
@@ -59,20 +66,26 @@ function fetchJson(url) {
   });
 }
 
-async function getStreamStatus(channels) {
-  if (!LIVE_STATUS_ENABLED || !channels || channels.length === 0) return Object.create(null);
+// Fetches live status, viewer counts and profile logos from ivr.fi. Logos are
+// returned for every channel ivr.fi knows about (live or offline) so the
+// following panel can render avatars regardless of stream status.
+async function getFollowData(channels) {
+  const result = { status: Object.create(null), logos: Object.create(null), liveStatus: LIVE_STATUS_ENABLED };
+  if (!channels || channels.length === 0) return result;
+  if (!LIVE_STATUS_ENABLED) return result;
   const logins = channels.map(c => encodeURIComponent(c)).join(',');
   try {
     const data = await fetchJson(`https://api.ivr.fi/v2/twitch/user?login=${logins}`);
-    const status = Object.create(null);
     (Array.isArray(data) ? data : []).forEach(u => {
       const login = (u.login || '').toLowerCase();
+      if (u.logo) result.logos[login] = u.logo;
       // viewer count for live channels; offline channels are left out
-      if (u.stream) status[login] = Number(u.stream.viewersCount) || 0;
+      if (u.stream) result.status[login] = Number(u.stream.viewersCount) || 0;
     });
-    return status;
+    return result;
   } catch (e) {
-    return Object.create(null);
+    result.liveStatus = false;
+    return result;
   }
 }
 
@@ -85,15 +98,62 @@ function allFollows() {
   });
 }
 
+// --- Server-side custom themes ---
+function allThemes() {
+  return new Promise((resolve, reject) => {
+    db.all('SELECT slug, name, css FROM themes ORDER BY updated_at ASC', [], (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+}
+
+function slugifyThemeName(name) {
+  const base = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return ('custom-' + (base || 'theme')).slice(0, 60);
+}
+
+app.get('/api/themes', async (req, res) => {
+  try {
+    const rows = await allThemes();
+    res.json(rows.map(r => ({ slug: r.slug, name: r.name, css: r.css })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/themes', (req, res) => {
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const css = typeof req.body?.css === 'string' ? req.body.css.trim() : '';
+  if (!name || name.length > 60 || !css || css.length > 50000) {
+    return res.status(400).json({ error: 'Valid name and css required' });
+  }
+  const slug = slugifyThemeName(name);
+  db.run('INSERT OR REPLACE INTO themes (slug, name, css, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)', [slug, name, css], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ slug, name, css });
+  });
+});
+
+app.delete('/api/themes/:slug', (req, res) => {
+  const slug = req.params.slug;
+  if (!/^[a-z0-9-]{1,60}$/.test(slug)) return res.status(400).json({ error: 'Invalid slug' });
+  db.run('DELETE FROM themes WHERE slug = ?', [slug], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ removed: this.changes > 0 });
+  });
+});
+
 app.get('/api/follows', async (req, res) => {
   try {
     const channels = await allFollows();
-    const status = await getStreamStatus(channels);
+    const data = await getFollowData(channels);
+    const status = data.status;
     const online = channels.filter(c => c in status).sort();
     const offline = channels.filter(c => !(c in status)).sort();
     const viewers = Object.create(null);
     online.forEach(c => { viewers[c] = status[c]; });
-    res.json({ online, offline, viewers, liveStatus: LIVE_STATUS_ENABLED });
+    res.json({ online, offline, viewers, logos: data.logos, liveStatus: data.liveStatus });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -111,6 +171,40 @@ app.post('/api/follows', (req, res) => {
     }
     res.json({ channel, added: this.changes > 0 });
   });
+});
+
+app.get('/api/follows/export', async (req, res) => {
+  try {
+    const channels = await allFollows();
+    res.json(channels);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/follows/import', async (req, res) => {
+  try {
+    let list = req.body;
+    if (!Array.isArray(list)) {
+      list = Array.isArray(req.body && req.body.channels) ? req.body.channels : [];
+    }
+    let imported = 0;
+    for (const item of list) {
+      const raw = (typeof item === 'string') ? item : (item && (item.channel || item.name || item.login));
+      const channel = normalizeChannel(raw);
+      if (!channel) continue;
+      const ok = await new Promise((resolve) => {
+        db.run('INSERT OR IGNORE INTO follows (channel) VALUES (?)', [channel], function(err) {
+          if (err) resolve(false);
+          else resolve(this.changes > 0);
+        });
+      });
+      if (ok) imported++;
+    }
+    res.json({ imported });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.delete('/api/follows/:channel', (req, res) => {
@@ -133,7 +227,9 @@ app.get('/api/stream/:channel', (req, res) => {
   const quality = typeof req.query.quality === 'string' ? req.query.quality : 'best';
   if (!QUALITY_RE.test(quality)) return res.status(400).json({ error: 'Invalid quality' });
 
-  const proc = spawn('streamlink', ['--json', '--', `https://twitch.tv/${channel}`, quality], { timeout: 60000 });
+  // Run without a quality argument so streamlink returns every available stream;
+  // the requested quality is then picked from the resulting map.
+  const proc = spawn('streamlink', ['--json', '--', `https://twitch.tv/${channel}`], { timeout: 60000 });
   let stdout = '';
   let stderr = '';
   let done = false;
@@ -151,9 +247,17 @@ app.get('/api/stream/:channel', (req, res) => {
     }
     try {
       const j = JSON.parse(stdout);
-      const upstream = j.url && parseUpstream(j.url);
+      const streams = (j && j.streams) || {};
+      let chosen = quality;
+      if (!streams[chosen]) {
+        if (streams.best) chosen = 'best';
+        else if (streams.worst) chosen = 'worst';
+        else chosen = Object.keys(streams)[0];
+      }
+      const stream = streams[chosen];
+      const upstream = stream && stream.url && parseUpstream(stream.url);
       if (!upstream) return finish(404, { error: 'stream not found or offline' });
-      finish(200, { url: hlsProxyPath(upstream.href), type: j.type });
+      finish(200, { url: hlsProxyPath(upstream.href), type: stream.type, quality: chosen, qualities: Object.keys(streams), title: (j.metadata && j.metadata.title) || null });
     } catch (e) {
       finish(500, { error: 'parse error' });
     }

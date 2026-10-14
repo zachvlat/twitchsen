@@ -19,17 +19,45 @@ class TwitchViewer {
         this.playerContainer = document.getElementById('playerContainer');
         this.twitchVideo = document.getElementById('twitchVideo');
         this.followsList = document.getElementById('followsList');
+        this.exportFollowsBtn = document.getElementById('exportFollowsBtn');
+        this.importFollowsBtn = document.getElementById('importFollowsBtn');
+        this.importFollowsInput = document.getElementById('importFollowsInput');
+        this.importHelpBadge = document.querySelector('.import-help-badge');
+        this.importHelpModal = document.getElementById('importHelpModal');
+        this.closeImportHelp = document.getElementById('closeImportHelp');
+        this.copyImportSnippet = document.getElementById('copyImportSnippet');
+        this.qualitySelect = document.getElementById('qualitySelect');
+        this.qualityControl = document.getElementById('qualityControl');
+        this.streamInfo = document.getElementById('streamInfo');
+        this.streamTitle = document.getElementById('streamTitle');
+        this.streamFollowBtn = document.getElementById('streamFollowBtn');
+        this.goLiveBtn = document.getElementById('goLiveBtn');
         this.sidebarEmpty = document.getElementById('sidebarEmpty');
         this.currentChannel = null;
-        this.customThemes = JSON.parse(localStorage.getItem('twitchsen-custom-themes') || '{}');
+        this.currentQuality = 'best';
+        this.followed = new Set();
+        this.customThemes = {};
         this.chatSizes = this.loadChatSizes();
+        this.sidebarCollapsed = localStorage.getItem('twitchsen-sidebar-collapsed') === '1';
         this.init();
     }
     
-    init() {
+    async init() {
+        await this.loadCustomThemes();
+        await this.migrateLocalCustomThemes();
+        await this.loadCustomThemes();
         this.loadTheme();
         this.loadCustomThemesIntoDropdown();
         this.loadFollows();
+        this.applySidebarCollapsed();
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', () => {
+                this.sidebarCollapsed = !this.sidebarCollapsed;
+                try { localStorage.setItem('twitchsen-sidebar-collapsed', this.sidebarCollapsed ? '1' : '0'); } catch (e) {}
+                this.applySidebarCollapsed();
+            });
+        }
         // Refresh live status and viewer counts every minute while the tab is visible
         setInterval(() => {
             if (!document.hidden) this.loadFollows();
@@ -40,10 +68,50 @@ class TwitchViewer {
         });
 
         this.loadBtn.addEventListener('click', () => this.goToInputChannel());
+
+        if (this.qualitySelect) {
+            this.qualitySelect.addEventListener('change', () => this.changeQuality());
+        }
+        if (this.streamFollowBtn) {
+            this.streamFollowBtn.addEventListener('click', () => this.toggleFollowFromStream());
+        }
+
+        if (this.exportFollowsBtn) {
+            this.exportFollowsBtn.addEventListener('click', () => this.exportFollows());
+        }
+        if (this.importFollowsBtn && this.importFollowsInput) {
+            this.importFollowsBtn.addEventListener('click', () => this.importFollowsInput.click());
+            this.importFollowsInput.addEventListener('change', (e) => this.importFollows(e));
+        }
+        if (this.importHelpBadge) {
+            this.importHelpBadge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (this.importHelpModal) this.importHelpModal.style.display = 'flex';
+            });
+        }
+        if (this.closeImportHelp && this.importHelpModal) {
+            this.closeImportHelp.addEventListener('click', () => { this.importHelpModal.style.display = 'none'; });
+            this.importHelpModal.addEventListener('click', (e) => {
+                if (e.target === this.importHelpModal) this.importHelpModal.style.display = 'none';
+            });
+        }
+        if (this.copyImportSnippet) {
+            this.copyImportSnippet.addEventListener('click', async () => {
+                const code = this.copyImportSnippet.parentElement.parentElement.querySelector('code');
+                if (!code) return;
+                try { await navigator.clipboard.writeText(code.textContent); } catch (e) {}
+            });
+        }
+        if (this.goLiveBtn) {
+            this.goLiveBtn.addEventListener('click', () => this.goToLiveEdge());
+        }
         
-        this.followBtn.addEventListener('click', () => {
-            this.followCurrentChannel();
-        });
+        if (this.followBtn) {
+            this.followBtn.addEventListener('click', () => {
+                this.followCurrentChannel();
+            });
+        }
         
         this.channelInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.goToInputChannel();
@@ -90,6 +158,43 @@ class TwitchViewer {
         }
     }
     
+    async loadCustomThemes() {
+        try {
+            const res = await fetch('/api/themes');
+            if (!res.ok) throw new Error('bad response');
+            const list = await res.json();
+            const themes = {};
+            (Array.isArray(list) ? list : []).forEach(t => {
+                if (t && t.slug) themes[t.slug] = { name: t.name, css: t.css };
+            });
+            this.customThemes = themes;
+        } catch (e) {
+            this.customThemes = this.customThemes || {};
+        }
+    }
+
+    async migrateLocalCustomThemes() {
+        if (localStorage.getItem('twitchsen-themes-migrated') === '1') {
+            try { localStorage.removeItem('twitchsen-custom-themes'); } catch (e) {}
+            return;
+        }
+        let local = {};
+        try { local = JSON.parse(localStorage.getItem('twitchsen-custom-themes') || '{}') || {}; } catch (e) {}
+        for (const slug in local) {
+            const t = local[slug];
+            if (!t || !t.name || !t.css) continue;
+            try {
+                await fetch('/api/themes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: t.name, css: t.css })
+                });
+            } catch (e) {}
+        }
+        try { localStorage.setItem('twitchsen-themes-migrated', '1'); } catch (e) {}
+        try { localStorage.removeItem('twitchsen-custom-themes'); } catch (e) {}
+    }
+
     loadCustomThemesIntoDropdown() {
         if (!this.customThemeGroup) return;
         this.customThemeGroup.innerHTML = '';
@@ -118,16 +223,23 @@ class TwitchViewer {
         if (this.themeSelect) this.themeSelect.value = document.documentElement.getAttribute('data-theme');
     }
     
-    saveCustomTheme() {
+    async saveCustomTheme() {
         const name = this.themeNameInput.value.trim();
         const css = this.themeCssEditor.value.trim();
         if (!name || !css) return;
-        const slug = 'custom-' + this.slugify(name);
-        this.customThemes[slug] = { name, css };
-        localStorage.setItem('twitchsen-custom-themes', JSON.stringify(this.customThemes));
-        this.loadCustomThemesIntoDropdown();
-        this.applyCustomTheme(slug, this.customThemes[slug]);
-        this.closeThemeEditor();
+        try {
+            const res = await fetch('/api/themes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, css })
+            });
+            if (!res.ok) return;
+            const theme = await res.json();
+            this.customThemes[theme.slug] = { name: theme.name, css: theme.css };
+            this.loadCustomThemesIntoDropdown();
+            this.applyCustomTheme(theme.slug, this.customThemes[theme.slug]);
+            this.closeThemeEditor();
+        } catch (e) {}
     }
     
     applyCustomTheme(slug, themeObj) {
@@ -153,6 +265,17 @@ class TwitchViewer {
         localStorage.setItem('twitchsen-theme', theme);
     }
     
+    applySidebarCollapsed() {
+        const sidebar = document.getElementById('sidebar');
+        if (!sidebar) return;
+        sidebar.classList.toggle('collapsed', !!this.sidebarCollapsed);
+        const btn = document.getElementById('sidebarToggle');
+        if (btn) {
+            btn.textContent = this.sidebarCollapsed ? '›' : '‹';
+            btn.title = this.sidebarCollapsed ? 'Expand follows' : 'Collapse follows';
+        }
+    }
+
     async loadFollows() {
         this.lastFollowsLoad = Date.now();
         try {
@@ -174,6 +297,9 @@ class TwitchViewer {
         }
         if (this.sidebarEmpty) this.sidebarEmpty.style.display = 'none';
         
+        const logos = follows.logos || {};
+        this.followed = new Set([...(follows.online || []), ...(follows.offline || [])].map(c => String(c).toLowerCase()));
+        this.updateFollowButton();
         if (follows.online.length > 0) {
             const onlineHeader = document.createElement('div');
             onlineHeader.className = 'follow-group-header';
@@ -181,7 +307,7 @@ class TwitchViewer {
             this.followsList.appendChild(onlineHeader);
             const viewers = follows.viewers || {};
             follows.online.forEach(channel => {
-                this.createFollowItem(channel, true, viewers[channel]);
+                this.createFollowItem(channel, true, viewers[channel], logos[channel]);
             });
         }
         
@@ -192,38 +318,50 @@ class TwitchViewer {
             offlineHeader.textContent = label + ' (' + follows.offline.length + ')';
             this.followsList.appendChild(offlineHeader);
             follows.offline.forEach(channel => {
-                this.createFollowItem(channel, false);
+                this.createFollowItem(channel, false, undefined, logos[channel]);
             });
         }
     }
     
-    createFollowItem(channel, isOnline, viewers) {
-        const item = document.createElement('div');
+    createFollowItem(channel, isOnline, viewers, logo) {
+        const item = document.createElement('a');
         item.className = 'follow-item' + (isOnline ? ' online' : ' offline');
-        const viewersHtml = typeof viewers === 'number'
-            ? `<span class="follow-viewers" title="${viewers.toLocaleString()} viewers">${formatViewers(viewers)}</span>`
-            : '';
-        item.innerHTML = `
-            <span class="follow-name">${escapeHtml(channel)}</span>
-            ${viewersHtml}
-            <div class="follow-actions">
-                <button class="follow-action-btn" data-action="watch" data-channel="${escapeHtml(channel)}" title="Watch">▶</button>
-                <button class="follow-action-btn" data-action="remove" data-channel="${escapeHtml(channel)}" title="Unfollow">✕</button>
-            </div>
-        `;
-        this.followsList.appendChild(item);
-        item.querySelectorAll('.follow-action-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const action = btn.dataset.action;
-                const ch = btn.dataset.channel;
-                if (action === 'watch') {
-                    window.location.href = `/channel/${encodeURIComponent(ch)}`;
-                } else if (action === 'remove') {
-                    this.unfollowChannel(ch);
-                }
+        item.href = `/channel/${encodeURIComponent(channel)}`;
+
+        const logoEl = document.createElement('span');
+        logoEl.className = 'follow-logo';
+        if (logo) {
+            const img = document.createElement('img');
+            img.src = logo;
+            img.alt = '';
+            img.loading = 'lazy';
+            img.addEventListener('error', () => {
+                img.remove();
+                logoEl.textContent = (channel.charAt(0) || '?').toUpperCase();
+                logoEl.classList.add('follow-logo-fallback');
             });
-        });
+            logoEl.appendChild(img);
+        } else {
+            logoEl.textContent = (channel.charAt(0) || '?').toUpperCase();
+            logoEl.classList.add('follow-logo-fallback');
+        }
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'follow-name';
+        nameEl.textContent = channel;
+
+        item.appendChild(logoEl);
+        item.appendChild(nameEl);
+
+        if (typeof viewers === 'number') {
+            const viewersEl = document.createElement('span');
+            viewersEl.className = 'follow-viewers';
+            viewersEl.title = viewers.toLocaleString() + ' viewers';
+            viewersEl.textContent = formatViewers(viewers);
+            item.appendChild(viewersEl);
+        }
+
+        this.followsList.appendChild(item);
     }
     
     async followCurrentChannel() {
@@ -262,17 +400,24 @@ class TwitchViewer {
             this.playingListenerAdded = true;
         }
         this.showPlayerMessage('Loading stream…');
+        if (this.qualityControl) this.qualityControl.style.display = 'none';
+        if (this.streamInfo) this.streamInfo.style.display = 'none';
+        const quality = this.currentQuality || 'best';
         try {
-            const res = await fetch(`/api/stream/${encodeURIComponent(channel)}`);
+            const res = await fetch(`/api/stream/${encodeURIComponent(channel)}?quality=${encodeURIComponent(quality)}`);
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
                 console.error('stream lookup failed', res.status, body);
                 this.showPlayerError(res.status === 404
                     ? 'Stream is offline or unavailable'
                     : `Could not load stream (${body.error || 'HTTP ' + res.status})`);
+                this.updateStreamInfo(res.status === 404 ? `${channel} (offline)` : channel, channel);
                 return;
             }
             const data = await res.json();
+            if (data.quality) this.currentQuality = data.quality;
+            this.populateQualityOptions(data.qualities, this.currentQuality);
+            this.updateStreamInfo(data.title, channel);
             const src = data.url;
             if (window.Hls && window.Hls.isSupported()) {
                 const Hls = window.Hls;
@@ -314,9 +459,142 @@ class TwitchViewer {
             }
         } catch (e) {
             this.showPlayerError('Failed to load stream');
+            this.updateStreamInfo(channel, channel);
         }
     }
     
+    updateStreamInfo(title, channel) {
+        if (this.streamTitle) {
+            this.streamTitle.textContent = title || channel || '';
+        }
+        if (this.streamInfo) {
+            this.streamInfo.style.display = 'flex';
+        }
+        this.updateFollowButton();
+    }
+
+    updateFollowButton() {
+        if (!this.streamFollowBtn) return;
+        if (!this.currentChannel) {
+            this.streamFollowBtn.style.display = 'none';
+            return;
+        }
+        this.streamFollowBtn.style.display = '';
+        const isFollowed = this.followed.has(this.currentChannel);
+        this.streamFollowBtn.textContent = isFollowed ? 'Unfollow' : 'Follow';
+    }
+
+    async exportFollows() {
+        try {
+            const res = await fetch('/api/follows/export');
+            if (!res.ok) return;
+            const data = await res.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'twitchsen-follows.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {}
+    }
+
+    async importFollows(event) {
+        const input = event.target;
+        const file = input.files && input.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            const res = await fetch('/api/follows/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(parsed)
+            });
+            if (res.ok) {
+                await this.loadFollows();
+            }
+        } catch (e) {}
+        input.value = '';
+    }
+
+    goToLiveEdge() {
+        const video = this.twitchVideo;
+        if (!video) return;
+        try {
+            if (this.hls) {
+                // Jump hls.js to the live sync position
+                if (typeof this.hls.liveSyncPosition === 'number') {
+                    video.currentTime = this.hls.liveSyncPosition;
+                } else if (video.seekable && video.seekable.length > 0) {
+                    video.currentTime = Math.max(0, video.seekable.end(video.seekable.length - 1) - 0.5);
+                }
+                this.hls.startLoad();
+            } else if (video.seekable && video.seekable.length > 0) {
+                video.currentTime = Math.max(0, video.seekable.end(video.seekable.length - 1) - 0.5);
+            }
+            video.play().catch(() => {});
+        } catch (e) {}
+    }
+
+    async toggleFollowFromStream() {
+        if (!this.currentChannel) return;
+        const ch = this.currentChannel;
+        try {
+            if (this.followed.has(ch)) {
+                await fetch(`/api/follows/${encodeURIComponent(ch)}`, { method: 'DELETE' });
+                this.followed.delete(ch);
+            } else {
+                await fetch('/api/follows', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channel: ch })
+                });
+                this.followed.add(ch);
+            }
+            await this.loadFollows();
+        } catch (e) {}
+        this.updateFollowButton();
+    }
+
+    changeQuality() {
+        if (!this.qualitySelect || !this.currentChannel) return;
+        this.currentQuality = this.qualitySelect.value;
+        this.loadStream(this.currentChannel);
+    }
+
+    populateQualityOptions(qualities, selected) {
+        if (!this.qualitySelect) return;
+        if (!qualities || qualities.length === 0) {
+            if (this.qualityControl) this.qualityControl.style.display = 'none';
+            return;
+        }
+        const prev = selected || this.currentQuality || 'best';
+        this.qualitySelect.innerHTML = '';
+        this.orderQualities(qualities).forEach(q => {
+            const opt = document.createElement('option');
+            opt.value = q;
+            opt.textContent = q;
+            if (q === prev) opt.selected = true;
+            this.qualitySelect.appendChild(opt);
+        });
+        if (qualities.indexOf(prev) === -1) this.qualitySelect.value = qualities[0];
+        if (this.qualityControl) this.qualityControl.style.display = 'block';
+    }
+
+    orderQualities(qs) {
+        const priority = (q) => {
+            if (q === 'best') return 1e9;
+            if (q === 'worst') return -1;
+            if (q === 'audio_only') return -2;
+            const m = String(q).match(/(\\d+)/);
+            return m ? parseInt(m[1], 10) : 0;
+        };
+        return (qs || []).slice().sort((a, b) => priority(b) - priority(a));
+    }
+
     // Browsers block autoplay with sound when the page was opened without a click
     // (e.g. /channel/name links), so fall back to muted autoplay, then to click-to-play.
     startPlayback() {
@@ -373,6 +651,7 @@ class TwitchViewer {
     loadChannel(channel) {
         if (!channel) return;
         this.currentChannel = channel.toLowerCase();
+        this.currentQuality = 'best';
         if (this.welcomeScreen) this.welcomeScreen.style.display = 'none';
         if (this.playerContainer) this.playerContainer.style.display = 'flex';
         if (this.twitchVideo) {
