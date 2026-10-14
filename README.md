@@ -2,6 +2,9 @@
 
 twitchsen is a minimal, self-hosted web application for watching Twitch streams without tracking or bloat. It provides a clean, distraction-free viewing experience with customizable CSS themes, channel following, and integrated chat.
 
+<img height="300" alt="1" src="https://github.com/user-attachments/assets/c0dc884d-8813-4838-8f50-bb531cbea964" />
+
+
 ## How it works
 
 - The backend resolves a channel's HLS playlist with [streamlink](https://streamlink.github.io/) (`/api/stream/:channel`), and the browser plays it with [hls.js](https://github.com/video-dev/hls.js) in a plain `<video>` element. Playlists and video segments are relayed through the backend (`/api/hls`, limited to Twitch video hosts), so browser tracking protection and ad blockers that block Twitch's CDN don't break playback. Each viewer uses roughly 3-8 Mbit/s of the server's bandwidth.
