@@ -29,6 +29,7 @@ const indexFile = path.join(staticPath, 'index.html');
 app.use('/css', express.static(path.join(staticPath, 'css')));
 app.use('/js', express.static(path.join(staticPath, 'js')));
 app.use('/assets', express.static(path.join(staticPath, 'assets')));
+app.use('/icon', express.static(path.join(staticPath, 'icon')));
 app.get(['/', '/index.html', '/channel/:name'], (req, res) => {
   res.sendFile(indexFile);
 });
@@ -64,6 +65,9 @@ function fetchJson(url) {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          return reject(new Error(`HTTP ${res.statusCode}`));
+        }
         try {
           resolve(JSON.parse(data));
         } catch (e) {
@@ -83,14 +87,22 @@ async function getFollowData(channels) {
   const result = { status: Object.create(null), logos: Object.create(null), liveStatus: LIVE_STATUS_ENABLED };
   if (!channels || channels.length === 0) return result;
   if (!LIVE_STATUS_ENABLED) return result;
-  const logins = channels.map(c => encodeURIComponent(c)).join(',');
   try {
-    const data = await fetchJson(`https://api.ivr.fi/v2/twitch/user?login=${logins}`);
-    (Array.isArray(data) ? data : []).forEach(u => {
-      const login = (u.login || '').toLowerCase();
-      if (u.logo) result.logos[login] = u.logo;
-      // viewer count for live channels; offline channels are left out
-      if (u.stream) result.status[login] = Number(u.stream.viewersCount) || 0;
+    // Batch the logins so a big following list doesn't exceed URL length limits
+    const batches = [];
+    for (let i = 0; i < channels.length; i += 50) {
+      batches.push(channels.slice(i, i + 50).map(c => encodeURIComponent(c)).join(','));
+    }
+    const results = await Promise.all(batches.map(logins =>
+      fetchJson(`https://api.ivr.fi/v2/twitch/user?login=${logins}`)
+    ));
+    results.forEach(data => {
+      (Array.isArray(data) ? data : []).forEach(u => {
+        const login = (u.login || '').toLowerCase();
+        if (u.logo) result.logos[login] = u.logo;
+        // viewer count for live channels; offline channels are left out
+        if (u.stream) result.status[login] = Number(u.stream.viewersCount) || 0;
+      });
     });
     return result;
   } catch (e) {
@@ -113,9 +125,9 @@ function slugifyThemeName(name) {
   return ('custom-' + (base || 'theme')).slice(0, 60);
 }
 
-app.get('/api/themes', async (req, res) => {
+app.get('/api/themes', (req, res) => {
   try {
-    const rows = await allThemes();
+    const rows = allThemes();
     res.json(rows.map(r => ({ slug: r.slug, name: r.name, css: r.css })));
   } catch (err) {
     res.status(500).json({ error: err.message });

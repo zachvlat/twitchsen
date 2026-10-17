@@ -19,6 +19,7 @@ COPY backend/server.js ./backend/server.js
 COPY css ./css
 COPY js ./js
 COPY assets ./assets
+COPY icon ./icon
 COPY index.html ./index.html
 COPY README.md ./README.md
 COPY LICENSE ./LICENSE

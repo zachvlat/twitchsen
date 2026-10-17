@@ -5,7 +5,6 @@ class TwitchViewer {
     constructor() {
         this.channelInput = document.getElementById('channelInput');
         this.loadBtn = document.getElementById('loadBtn');
-        this.followBtn = document.getElementById('followBtn');
         this.themeSelect = document.getElementById('themeSelect');
         this.customThemeGroup = document.getElementById('customThemeGroup');
         this.dynamicThemeStyles = document.getElementById('dynamicThemeStyles');
@@ -38,6 +37,9 @@ class TwitchViewer {
         this.followed = new Set();
         this.customThemes = {};
         this.chatSizes = this.loadChatSizes();
+        // Sticky-bottom state: is the view pinned to the newest messages?
+        this.chatFollowing = true;
+        this.chatUnread = 0;
         this.sidebarCollapsed = localStorage.getItem('twitchsen-sidebar-collapsed') === '1';
         this.init();
     }
@@ -65,6 +67,8 @@ class TwitchViewer {
         document.addEventListener('visibilitychange', () => {
             // Catch up when returning to the tab, but not on every quick tab switch
             if (!document.hidden && Date.now() - this.lastFollowsLoad > 30000) this.loadFollows();
+            // Background tabs can drift a pinned scroll position; snap back on return
+            if (!document.hidden && this.chatFollowing) this.pinChatToBottom();
         });
 
         this.loadBtn.addEventListener('click', () => this.goToInputChannel());
@@ -105,12 +109,6 @@ class TwitchViewer {
         }
         if (this.goLiveBtn) {
             this.goLiveBtn.addEventListener('click', () => this.goToLiveEdge());
-        }
-        
-        if (this.followBtn) {
-            this.followBtn.addEventListener('click', () => {
-                this.followCurrentChannel();
-            });
         }
         
         this.channelInput.addEventListener('keypress', (e) => {
@@ -364,25 +362,6 @@ class TwitchViewer {
         this.followsList.appendChild(item);
     }
     
-    async followCurrentChannel() {
-        if (!this.currentChannel) return;
-        try {
-            await fetch('/api/follows', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ channel: this.currentChannel })
-            });
-            await this.loadFollows();
-        } catch (e) {}
-    }
-    
-    async unfollowChannel(channel) {
-        try {
-            await fetch(`/api/follows/${encodeURIComponent(channel)}`, { method: 'DELETE' });
-            await this.loadFollows();
-        } catch (e) {}
-    }
-    
     async loadStream(channel, isRetry = false) {
         const video = this.twitchVideo;
         if (!video) return;
@@ -597,7 +576,7 @@ class TwitchViewer {
             if (q === 'best') return 1e9;
             if (q === 'worst') return -1;
             if (q === 'audio_only') return -2;
-            const m = String(q).match(/(\\d+)/);
+            const m = String(q).match(/\d+/);
             return m ? parseInt(m[1], 10) : 0;
         };
         return (qs || []).slice().sort((a, b) => priority(b) - priority(a));
@@ -682,6 +661,7 @@ class TwitchViewer {
                         </div>
                     `).join('')}
                 </div>
+                <button id="chatJumpBtn" class="chat-jump" type="button">New messages ↓</button>
             `;
             chatSidebar.querySelectorAll('.chat-size-control').forEach(control => {
                 const key = control.dataset.setting;
@@ -699,22 +679,57 @@ class TwitchViewer {
     }
     
     startChat(channel) {
-        if (this.chatSocket) {
-            try { this.chatSocket.close(); } catch (e) {}
-            this.chatSocket = null;
+        if (this.chatReconnectTimer) {
+            clearTimeout(this.chatReconnectTimer);
+            this.chatReconnectTimer = null;
         }
+        this.closeChatSocket();
+        this.chatChannel = channel;
+        this.chatFollowing = true;
+        this.chatUnread = 0;
+        this.chatStatusNote = null;
         const messagesEl = document.getElementById('chatMessages');
         if (!messagesEl) return;
         messagesEl.innerHTML = '';
         this.emotes = new Map();
         this.emoteRoomId = null;
+        // Track whether the view is pinned to the newest messages, instead of
+        // deciding per message (which easily got knocked out by background tabs
+        // drifting the scroll position, leaving the chat stuck scrolled up)
+        messagesEl.addEventListener('scroll', () => this.handleChatScroll());
+        const jumpBtn = document.getElementById('chatJumpBtn');
+        if (jumpBtn) {
+            jumpBtn.addEventListener('click', () => {
+                this.chatFollowing = true;
+                this.chatUnread = 0;
+                this.pinChatToBottom();
+                this.updateChatJumpButton();
+            });
+        }
+        this.updateChatJumpButton();
+        this.openChatSocket(channel);
+    }
+
+    closeChatSocket() {
+        if (!this.chatSocket) return;
+        try {
+            this.chatSocket.twitchsenClosed = true;
+            this.chatSocket.close();
+        } catch (e) {}
+        this.chatSocket = null;
+    }
+
+    openChatSocket(channel) {
         const ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
         this.chatSocket = ws;
         ws.onopen = () => {
+            this.chatReconnectAttempt = 0;
+            this.setChatStatus(null);
             ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
             ws.send('PASS SCHMOOPIIE');
             ws.send('NICK justinfan' + Math.floor(Math.random() * 99999));
             ws.send('JOIN #' + channel);
+            if (this.chatFollowing) this.pinChatToBottom();
         };
         ws.onmessage = (event) => {
             const lines = event.data.split('\r\n');
@@ -734,15 +749,69 @@ class TwitchViewer {
             });
         };
         ws.onclose = () => {
-            const el = document.getElementById('chatMessages');
-            if (el) {
-                const note = document.createElement('div');
-                note.className = 'chat-system';
-                note.textContent = 'Disconnected from chat';
-                el.appendChild(note);
-            }
+            // Ignore closes we caused ourselves (channel switch); otherwise reconnect
+            if (ws.twitchsenClosed || this.chatSocket !== ws) return;
+            this.chatSocket = null;
+            this.scheduleChatReconnect();
         };
         ws.onerror = () => {};
+    }
+
+    scheduleChatReconnect() {
+        const attempt = (this.chatReconnectAttempt || 0) + 1;
+        this.chatReconnectAttempt = attempt;
+        // Exponential backoff: 1s, 2s, 4s, ... capped at 30s (+ jitter), forever
+        const delay = Math.min(30000, 1000 * 2 ** (attempt - 1)) + Math.random() * 500;
+        this.setChatStatus('Disconnected from chat — reconnecting…');
+        this.chatReconnectTimer = setTimeout(() => {
+            this.chatReconnectTimer = null;
+            if (this.chatChannel) this.openChatSocket(this.chatChannel);
+        }, delay);
+    }
+
+    // One reusable status note in the message list; removed again on reconnect
+    setChatStatus(text) {
+        const el = document.getElementById('chatMessages');
+        if (!el) return;
+        if (this.chatStatusNote && !this.chatStatusNote.isConnected) this.chatStatusNote = null;
+        if (!text) {
+            if (this.chatStatusNote) {
+                this.chatStatusNote.remove();
+                this.chatStatusNote = null;
+            }
+            return;
+        }
+        if (!this.chatStatusNote) {
+            this.chatStatusNote = document.createElement('div');
+            this.chatStatusNote.className = 'chat-system';
+            el.appendChild(this.chatStatusNote);
+        }
+        this.chatStatusNote.textContent = text;
+        if (this.chatFollowing) this.pinChatToBottom();
+    }
+
+    pinChatToBottom() {
+        const el = document.getElementById('chatMessages');
+        if (el) el.scrollTop = el.scrollHeight;
+    }
+
+    handleChatScroll() {
+        const el = document.getElementById('chatMessages');
+        if (!el) return;
+        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 60;
+        if (atBottom === this.chatFollowing) return;
+        this.chatFollowing = atBottom;
+        if (atBottom) this.chatUnread = 0;
+        this.updateChatJumpButton();
+    }
+
+    updateChatJumpButton() {
+        const btn = document.getElementById('chatJumpBtn');
+        if (!btn) return;
+        btn.classList.toggle('chat-jump-visible', !this.chatFollowing);
+        btn.textContent = this.chatUnread > 0
+            ? `↓ ${this.chatUnread > 999 ? '999+' : this.chatUnread} new message${this.chatUnread === 1 ? '' : 's'}`
+            : 'New messages ↓';
     }
     
     loadChatSizes() {
@@ -768,7 +837,6 @@ class TwitchViewer {
         const chatSidebar = document.getElementById('chatSidebar');
         if (!chatSidebar) return;
         const messagesEl = document.getElementById('chatMessages');
-        const atBottom = messagesEl && messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
         chatSidebar.style.setProperty('--chat-font-size', this.chatSizes.text + 'px');
         chatSidebar.style.setProperty('--chat-emote-size', this.chatSizes.emote + 'px');
         chatSidebar.querySelectorAll('.chat-size-control').forEach(control => {
@@ -782,7 +850,7 @@ class TwitchViewer {
         // Swap already rendered emotes to the higher-resolution image when they get big
         const large = this.chatSizes.emote > CHAT_SIZES.emote.default;
         chatSidebar.querySelectorAll('img.chat-emote').forEach(img => setEmoteResolution(img, large));
-        if (atBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+        if (messagesEl && this.chatFollowing) this.pinChatToBottom();
     }
 
     async loadEmotes(roomId) {
@@ -812,7 +880,6 @@ class TwitchViewer {
         const color = tags['color'] || '#9146ff';
         const messagesEl = document.getElementById('chatMessages');
         if (!messagesEl) return;
-        const atBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
         const msgEl = document.createElement('div');
         msgEl.className = 'chat-message';
         const nameEl = document.createElement('span');
@@ -833,14 +900,15 @@ class TwitchViewer {
         while (messagesEl.childElementCount > 300) {
             messagesEl.removeChild(messagesEl.firstChild);
         }
-        if (atBottom) {
-            messagesEl.scrollTop = messagesEl.scrollHeight;
+        if (this.chatFollowing) {
+            this.pinChatToBottom();
             // Emote images change line widths once loaded; stay pinned to the bottom
             msgEl.querySelectorAll('img').forEach(img => img.addEventListener('load', () => {
-                if (messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120) {
-                    messagesEl.scrollTop = messagesEl.scrollHeight;
-                }
+                if (this.chatFollowing) this.pinChatToBottom();
             }, { once: true }));
+        } else {
+            this.chatUnread++;
+            this.updateChatJumpButton();
         }
     }
 
@@ -948,12 +1016,6 @@ function formatViewers(n) {
 function normalizeChannel(value) {
     const ch = (value || '').trim().toLowerCase();
     return /^[a-z0-9_]{1,25}$/.test(ch) ? ch : null;
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 if (document.readyState === 'loading') {
