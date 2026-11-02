@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>twitchsen - Minimal Self-Hosted Twitch Client</title>
+    <style>
+        :root {
+            --bg-color: #0f0f11;
+            --surface-color: #1a1a1c;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --accent-color: #9146FF; /* Twitch Purple */
+            --border-color: #2f2f31;
+            --code-bg: #242426;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            color: var(--accent-color);
+        }
+
+        .subtitle {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .badge {
+            display: inline-block;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        section {
+            margin-bottom: 3rem;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            border-left: 4px solid var(--accent-color);
+            padding-left: 10px;
+        }
+
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        li {
+            position: relative;
+            padding-left: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        li::before {
+            content: "•";
+            color: var(--accent-color);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .feature-card {
+            background-color: var(--surface-color);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .feature-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .feature-card p {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+
+        pre {
+            background-color: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            color: #e6e6e6;
+        }
+
+        code {
+            font-family: "Courier New", Courier, monospace;
+            background-color: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .note {
+            background-color: rgba(145, 70, 255, 0.1);
+            border-left: 4px solid var(--accent-color);
+            padding: 1rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 1rem;
+            }
+            h1 {
+                font-size: 2.2rem;
+            }
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>twitchsen</h1>
+            <p class="subtitle">A minimal, self-hosted web application for watching Twitch streams without tracking or bloat.</p>
+            <div class="badge">GPL-3.0 License • Docker • Node.js</div>
+        </header>
+
+        <section>
+            <h2>Why twitchsen?</h2>
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                twitchsen provides a clean, distraction-free viewing experience. It bypasses the heavy Twitch website and ads, delivering just the video stream and chat.
+            </p>
+            <ul>
+                <li><strong>No Tracking:</strong> No Twitch page, no analytics scripts.</li>
+                <li><strong>Self-Hosted:</strong> Run it on your own server with Docker.</li>
+                <li><strong>Lightweight:</strong> Pure HTML, CSS, and Vanilla JS (no frameworks).</li>
+                <li><strong>Customizable:</strong> 6 built-in themes + custom CSS editor.</li>
+                <li><strong>Mobile Friendly:</strong> Responsive design for all devices.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>How It Works</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Stream Relay</h3>
+                    <p>The backend resolves the channel's HLS playlist using <code>streamlink</code>. The browser plays it via <code>hls.js</code>. This relays segments through your server, bypassing CDN blocks.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Read-Only Chat</h3>
+                    <p>Connects to Twitch IRC over WebSocket for an anonymous, read-only chat experience. Supports Twitch, 7TV, BTTV, and FrankerFaceZ emotes.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Persistence</h3>
+                    <p>Follows and custom themes are stored server-side in SQLite (using Node's built-in <code>node:sqlite</code>), so no native modules are needed.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Live Status</h3>
+                    <p>Live/offline status is fetched from <code>api.ivr.fi</code> (can be disabled in config).</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Quick Start (Docker)</h2>
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">The easiest way to run twitchsen is via Docker. This command starts the service on port 4444.</p>
+            
+            <pre><code>docker run -d \
+  --name twitchsen \
+  --restart unless-stopped \
+  -p 4444:4444 \
+  -v ~/twitchsen/data:/app/backend/db \
+  zatsando/twitchsen:latest</code></pre>
+
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">Then open <a href="http://localhost:4444">http://localhost:4444</a> in your browser.</p>
+
+            <div class="note">
+                <strong>Note:</strong> The <code>-v</code> volume mounts your local data directory to the container. This ensures your follows and themes persist across updates. Without it, data is lost when the container is replaced.
+            </div>
+        </section>
+
+        <section>
+            <h2>Running Without Docker</h2>
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">If you prefer not to use Docker, you need Node.js 22.13+ and <code>streamlink</code> installed on your system.</p>
+            <pre><code>cd backend
+npm install
+node server.js</code></pre>
+        </section>
+
+        <footer>
+            <p>Source Code: <a href="https://github.com/zachvlat/twitchsen" target="_blank">github.com/zachvlat/twitchsen</a></p>
+            <p>Made with ❤️ for the self-hosting community.</p>
+        </footer>
+    </div>
+
+</body>
+</html>
